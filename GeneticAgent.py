@@ -21,45 +21,38 @@ mu0 = 4*nu.pi*1e-7
 
 # Model
 
-# def _fBz(phi, r, x, y, z, _z):
-#     return ( -r*sin(phi)*(y-r*sin(phi)) - r*cos(phi)*(x-r*cos(phi)) ) / ( (x-r*cos(phi))**2 + (y-r*sin(phi))**2 + (z-_z)**2 )**1.5
-#
-#
-# def Cz(r, x, y, z, coilZPosition):
-#     return mu0/(4*pi) * quadrature(_fBz, 0, 2*pi, args=(r, x, y, z, coilZPosition), tol=1e-12, maxiter=100000)[0]
-#
-#
-# def calculateBzFromCoil(r, l, N, I, x, y, z):
-#     coilZPositions = nu.linspace(-l/2, l/2, N)
-#     return sum((Cz(r, x, y, z, coilZPosition) for coilZPosition in coilZPositions)) * I
-#
-#
-# def calculateBzFromLoop(r, coilZPosition, I, x, y, z):
-#     return Cz(r, x, y, z, coilZPosition) * I
-
 
 def lossFunction(coil, points=50):
     # if loss already calculated, return
     if coil.loss != None:
         return coil
-    # get L2
-    L2 = coil.calculateL()
-    # get M
-    M = 0
-    for r2, z2 in coil.distributionInRealCoordinates:
-        for z1 in nu.linspace(-l1/2, l1/2, N1):
-            M += MutalInductance(r1, r2, d=abs(z2-z1))
-    # get a, b at specific position
-    loss = 0
+    # # get L2
+    # L2 = coil.calculateL()
+    # # get M
+    # M = 0
+    # for r2, z2 in coil.distributionInRealCoordinates:
+    #     for z1 in nu.linspace(-l1/2, l1/2, N1):
+    #         M += MutalInductance(r1, r2, d=abs(z2-z1))
+    # # get a, b at specific position
+    # loss = 0
+    # los = nu.linspace(0, 0.9*coil.minRadius, points)
+    # zs = nu.linspace(0, coil.Z0, points)
+    # for lo in los:
+    #     for z in zs:
+    #         a = calculateBnormFromCoil(I1, r1, l1, N1, lo, z)
+    #         b = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
+    #         loss += (a - b/sqrt(1+(R2/L2)**2)*M/L2)**2
+
+    bs = nu.zeros((points, points))
     los = nu.linspace(0, 0.9*coil.minRadius, points)
     zs = nu.linspace(0, coil.Z0, points)
-    for lo in los:
-        for z in zs:
-            a = calculateBnormFromCoil(I1, r1, l1, N1, lo, z)
-            b = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
-            loss += (a - b/sqrt(1+(R2/L2)**2)*M/L2)**2
+    for loIndex, lo in enumerate(los):
+        for zIndex, z in enumerate(zs):
+            bs[loIndex, zIndex] = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
+    m = bs.mean()
+    loss = ((bs-m)**2).sum()
     print(coil.distribution[-2:, :])
-    print(f'L2: {L2}, M: {M}, loss: {loss}')
+    # print(f'L2: {L2}, M: {M}, loss: {loss}')
     assert loss >= 0
     # add to generationQueue
     coil.loss = loss

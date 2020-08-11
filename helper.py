@@ -33,14 +33,39 @@ def BpFromBiosavart(I, coilRadius, coilZ, lo, z):
     return (Bp_r, Bp_z)
 
 
+def BpFromVectorPotential(I, coilRadius, coilZ, lo, z):
+    squaredK = 4*coilRadius*lo/( (coilRadius+lo)**2 + (z-coilZ)**2 )
+    k = sqrt(squaredK)
+    Aphi = lambda z: mu0*I/pi * ( (sqrt((coilRadius+lo)**2+(z-coilZ)**2)/(2*lo) - coilRadius/sqrt((coilRadius+lo)**2+(z-coilZ)**2))*ellipk(squaredK) - ellipe(squaredK) )
+    dAphi_dz = (Aphi(z*1.0001) - Aphi(z))/abs(z*0.0001)
+
+    loAphi = lambda lo: mu0*I/pi * ( (0.5*sqrt((coilRadius+lo)**2+(z-coilZ)**2) - coilRadius*lo/sqrt((coilRadius+lo)**2+(z-coilZ)**2))*ellipk(squaredK) - ellipe(squaredK) )
+    dloAphi_dlo = (loAphi(lo*1.0001) - loAphi(lo))/abs(lo*0.0001)
+
+    Bp_r = - dAphi_dz
+    Bp_z = 1/lo*dloAphi_dlo
+    return (Bp_r, Bp_z)
+
+    # dk_dlo = 0.5/k * ( 4*coilRadius/((coilRadius+lo)**2+(z-coilZ)**2) - 4*coilRadius*lo/((coilRadius+lo)**2+(z-coilZ)**2)**2 * 2*(coilRadius+coilZ) ) if lo != 0 else 0
+    # dk_dz = -4*coilRadius*lo/(2*k) * ((coilRadius+lo)**2+(z-coilZ)**2)**(-2) * 2*(z-coilZ) if lo != 0 else 0
+    # if k >= 0.9:
+    #     Bp_r = -mu0*I/pi * 1/k * sqrt(coilRadius/lo) * ( -1/k**2 * ellipkm1(squaredK) + (1/k-k/2)/(k*(1-k**2))*ellipe(squaredK) ) * dk_dz
+    #     Bp_z = mu0*I/pi * sqrt(coilRadius/lo) * ( ((0.5/k-k/4)/lo+(1-1/k**2)) * ellipkm1(squaredK) + (-1/(2*k*lo)+(1/k-k/2)/(k*(1-k**2))) * ellipe(squaredK) ) * dk_dlo
+    # else:
+    #     Bp_r = -mu0*I/pi * 1/k * sqrt(coilRadius/lo) * ( -1/k**2 * ellipk(squaredK) + (1/k-k/2)/(k*(1-k**2))*ellipe(squaredK) ) * dk_dz
+    #     Bp_z = mu0*I/pi * sqrt(coilRadius/lo) * ( ((0.5/k-k/4)/lo+(1-1/k**2)) * ellipk(squaredK) + (-1/(2*k*lo)+(1/k-k/2)/(k*(1-k**2))) * ellipe(squaredK) ) * dk_dlo
+    # return (Bp_r, Bp_z)
+
+
 # # phi_: coil phi, a: coil radius, z_: coil z position, lo: point p's radius, z: point p's z position
 # def _absBp(z, lo, a, z_):
 #     bp = BpFromBiosavart(I=I, coilRadius=a, coilZ=z_, lo=lo, z=z)
 #     return bp[0]**2 + bp[1]**2
 
-# def singleLossFromBiosavart(coilRadius, coilZ, Z0):
-#     double_integrate = dblquad(_absBp, 0, 0.99*coilRadius, lambda z: 0, lambda z: Z0, args=(coilRadius, coilZ), tol=1e-8, maxiter=10000)[0]
-#     return double_integrate
+def singleLossFromBiosavart(coilRadius, coilZ, Z0):
+    double_integrate = dblquad(_absBp, 0, 0.99*coilRadius, lambda z: 0, lambda z: Z0, args=(coilRadius, coilZ), tol=1e-8, maxiter=10000)[0]
+    return double_integrate
+
 
 
 def calculateBnormFromLoop(I, coilRadius, coilZ, lo, z):
@@ -56,11 +81,11 @@ def _f(phi, r1, r2, d):
     return r1 * r2 * nu.cos(phi) / nu.sqrt( r1**2 + r2**2 + d**2 - 2*r1*r2*nu.cos(phi) )
 
 def MutalInductance(r1, r2, d):
-    # return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-9, maxiter=100000)[0]
+    # return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=10000)[0]
     # return 0.5 * mu0 * quadrature(_g, -1, 1, args=(r1, r2, d), tol=1e-12, maxiter=100000)[0]
     squaredK = 4*r1*r2/((r1+r2)**2+d**2)
     k = nu.sqrt(squaredK)
-    if k < 0.99:
+    if k < 0.9:
         result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipk(squaredK) - 2/k*ellipe(squaredK) )
     else:  # k around 1
         result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipkm1(squaredK) - 2/k*ellipe(squaredK) )
@@ -76,23 +101,24 @@ def MutalInductance(r1, r2, d):
 if __name__ == '__main__':
     coilRadius = 1.5e-2
     coilZ = 0
-    points = 100
+    points = 50
     Z0 = coilRadius
-    los = nu.linspace(0, 0.9*coilRadius, points)
-    zs = nu.linspace(-Z0, Z0, points)
+    los = nu.linspace(0.1*coilRadius, 0.9*coilRadius, points)
+    zs = nu.linspace(0, Z0, points)
 
     # create args
     args = []
     for lo in los:
         for z in zs:
-            args.append((coilRadius, coilZ, lo, z))
+            args.append((I, coilRadius, coilZ, lo, z))
     # calculate bs for all points
     bs = []
     with mp.Pool(processes=min(mp.cpu_count()-1, 50)) as pool:
-        bs = pool.starmap(BpFromBiosavart, args)
+        bs = pool.starmap(BpFromB, args)
     bs_r = nu.array([ b[0] for b in bs ]).reshape((points, points))
     bs_z = nu.array([ b[1] for b in bs ]).reshape((points, points))
-
+    print(bs_r)
+    print(bs_z)
     pl.xlabel(r'$\rho$/coil_radius')
     pl.ylabel(r'$Z-Z_0$')
     X, Y = nu.meshgrid(los/coilRadius, zs-coilZ, indexing='ij')
