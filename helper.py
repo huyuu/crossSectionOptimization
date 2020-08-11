@@ -57,17 +57,6 @@ def BpFromVectorPotential(I, coilRadius, coilZ, lo, z):
     # return (Bp_r, Bp_z)
 
 
-# # phi_: coil phi, a: coil radius, z_: coil z position, lo: point p's radius, z: point p's z position
-# def _absBp(z, lo, a, z_):
-#     bp = BpFromBiosavart(I=I, coilRadius=a, coilZ=z_, lo=lo, z=z)
-#     return bp[0]**2 + bp[1]**2
-
-def singleLossFromBiosavart(coilRadius, coilZ, Z0):
-    double_integrate = dblquad(_absBp, 0, 0.99*coilRadius, lambda z: 0, lambda z: Z0, args=(coilRadius, coilZ), tol=1e-8, maxiter=10000)[0]
-    return double_integrate
-
-
-
 def calculateBnormFromLoop(I, coilRadius, coilZ, lo, z):
     bp = BpFromBiosavart(I=I, coilRadius=coilRadius, coilZ=coilZ, lo=lo, z=z)
     return sqrt(bp[0]**2 + bp[1]**2)
@@ -77,23 +66,56 @@ def calculateBnormFromCoil(I, r, l, N, lo, z):
     return sum((calculateBnormFromLoop(I, r, coilZ, lo, z) for coilZ in coilZPositions))
 
 
+def calculateBFromCoil(coilCoordinates, minRadius, Z0, lo, z, points):
+    bp_r = 0
+    bp_z = 0
+    for a, z_ in coilCoordinates:
+        bp = BpFromBiosavart(I1, a, z_, lo, z)
+        bp_r += bp[0]
+        bp_z += bp[1]
+    return (bp_r, bp_z)
+
+
+def plotDistribution(coilCoordinates, minRadius, Z0, points):
+    los = nu.linspace(0, 0.9*minRadius, points)
+    zs = nu.linspace(0, Z0, points)
+    # create args
+    args = []
+    for lo in los:
+        for z in zs:
+            args.append((I, coilRadius, coilZ, lo, z))
+    # calculate bs for all points
+    bs = []
+    with mp.Pool(processes=min(mp.cpu_count()-1, 50)) as pool:
+        bs = pool.starmap(calculateBFromCoil, args)
+    bs_r = nu.array([ b[0] for b in bs ]).reshape((points, points))
+    bs_z = nu.array([ b[1] for b in bs ]).reshape((points, points))
+    # plot
+    pl.xlabel(r'$\rho$/coil_radius')
+    pl.ylabel(r'$Z-Z_0$')
+    X, Y = nu.meshgrid(los/coilRadius, zs-coilZ, indexing='ij')
+    pl.quiver(X, Y, bs_r, bs_z)
+    pl.show()
+
+
+
 def _f(phi, r1, r2, d):
     return r1 * r2 * nu.cos(phi) / nu.sqrt( r1**2 + r2**2 + d**2 - 2*r1*r2*nu.cos(phi) )
 
 def MutalInductance(r1, r2, d):
-    # return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=10000)[0]
-    # return 0.5 * mu0 * quadrature(_g, -1, 1, args=(r1, r2, d), tol=1e-12, maxiter=100000)[0]
-    squaredK = 4*r1*r2/((r1+r2)**2+d**2)
-    k = nu.sqrt(squaredK)
-    if k < 0.9:
-        result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipk(squaredK) - 2/k*ellipe(squaredK) )
-    else:  # k around 1
-        result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipkm1(squaredK) - 2/k*ellipe(squaredK) )
+    return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=100000)[0]
 
-    if result >= 0:
-        return result
-    else:
-        return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=10000)[0]
+    # squaredK = 4*r1*r2/((r1+r2)**2+d**2)
+    # k = nu.sqrt(squaredK)
+    # if k < 0.9:
+    #     result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipk(squaredK) - 2/k*ellipe(squaredK) )
+    # else:  # k around 1
+    #     result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipkm1(squaredK) - 2/k*ellipe(squaredK) )
+    #
+    # if result >= 0:
+    #     return result
+    # else:
+    #     return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=10000)[0]
 
 
 
@@ -114,11 +136,9 @@ if __name__ == '__main__':
     # calculate bs for all points
     bs = []
     with mp.Pool(processes=min(mp.cpu_count()-1, 50)) as pool:
-        bs = pool.starmap(BpFromB, args)
+        bs = pool.starmap(BpFromBiosavart, args)
     bs_r = nu.array([ b[0] for b in bs ]).reshape((points, points))
     bs_z = nu.array([ b[1] for b in bs ]).reshape((points, points))
-    print(bs_r)
-    print(bs_z)
     pl.xlabel(r'$\rho$/coil_radius')
     pl.ylabel(r'$Z-Z_0$')
     X, Y = nu.meshgrid(los/coilRadius, zs-coilZ, indexing='ij')

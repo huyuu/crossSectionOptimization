@@ -11,7 +11,7 @@ import datetime as dt
 import os
 import pickle
 
-from helper import calculateBnormFromLoop, calculateBnormFromCoil, MutalInductance
+from helper import calculateBnormFromLoop, calculateBnormFromCoil, MutalInductance, plotDistribution
 
 
 # Constants
@@ -26,33 +26,34 @@ def lossFunction(coil, points=50):
     # if loss already calculated, return
     if coil.loss != None:
         return coil
-    # # get L2
-    # L2 = coil.calculateL()
-    # # get M
-    # M = 0
-    # for r2, z2 in coil.distributionInRealCoordinates:
-    #     for z1 in nu.linspace(-l1/2, l1/2, N1):
-    #         M += MutalInductance(r1, r2, d=abs(z2-z1))
-    # # get a, b at specific position
-    # loss = 0
-    # los = nu.linspace(0, 0.9*coil.minRadius, points)
-    # zs = nu.linspace(0, coil.Z0, points)
-    # for lo in los:
-    #     for z in zs:
-    #         a = calculateBnormFromCoil(I1, r1, l1, N1, lo, z)
-    #         b = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
-    #         loss += (a - b/sqrt(1+(R2/L2)**2)*M/L2)**2
-
-    bs = nu.zeros((points, points))
+    # get L2
+    L2 = coil.calculateL()
+    # get M
+    M = 0
+    for r2, z2 in coil.distributionInRealCoordinates:
+        for z1 in nu.linspace(-l1/2, l1/2, N1):
+            M += MutalInductance(r1, r2, d=abs(z2-z1)+1e-8)
+    # get a, b at specific position
+    loss = 0
     los = nu.linspace(0, 0.9*coil.minRadius, points)
     zs = nu.linspace(0, coil.Z0, points)
-    for loIndex, lo in enumerate(los):
-        for zIndex, z in enumerate(zs):
-            bs[loIndex, zIndex] = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
-    m = bs.mean()
-    loss = ((bs-m)**2).sum()
+    for lo in los:
+        for z in zs:
+            a = calculateBnormFromCoil(I1, r1, l1, N1, lo, z)
+            b = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
+            loss += (a - b/sqrt(1+(R2/L2)**2)*M/L2)**2
+
+    # bs = nu.zeros((points, points))
+    # los = nu.linspace(0, 0.9*coil.minRadius, points)
+    # zs = nu.linspace(0, coil.Z0, points)
+    # for loIndex, lo in enumerate(los):
+    #     for zIndex, z in enumerate(zs):
+    #         bs[loIndex, zIndex] = sum( (calculateBnormFromLoop(I1, r2, z2, lo, z) for r2, z2 in coil.distributionInRealCoordinates) )
+    # m = bs.mean()
+    # loss = ((bs-m)**2).sum()
+
     print(coil.distribution[-2:, :])
-    # print(f'L2: {L2}, M: {M}, loss: {loss}')
+    print(f'L2: {L2}, M: {M}, loss: {loss}')
     assert loss >= 0
     # add to generationQueue
     coil.loss = loss
@@ -179,7 +180,7 @@ class Coil():
         for i, (r, z) in enumerate(self.distributionInRealCoordinates):
             for j in range(i, len(self.distributionInRealCoordinates)):
                 r_, z_ = self.distributionInRealCoordinates[j]
-                Ms[i, j] = MutalInductance(r_, r, d=abs(z-z_+1e-8))
+                Ms[i, j] = MutalInductance(r_, r, d=abs(z-z_)+1e-8)
         Ms += nu.triu(Ms, k=1).T
         return Ms.sum()
 
@@ -246,6 +247,8 @@ class GeneticAgent():
             print(coil.distribution)
             print(coil.loss)
             print('\n')
+        coil = self.generation[0]
+        plotDistribution(coil.distributionInRealCoordinates, coil.minRadius, coil.Z0, points=100)
 
 
 # Main
