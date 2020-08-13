@@ -253,7 +253,7 @@ class GeneticAgent():
             nu.save('minLosses.npy', nu.array(minLosses))
 
 
-    def runAsMasterOnCluster(self, loopAmount=100, hostIP='192.168.0.181', hostPort=6379):
+    def runAsMasterOnCluster(self, loopAmount=100, hostIP='10.32.247.48', hostPort=6379):
         minLosses = []
         if os.path.exists('minLosses.npy'):
             minLosses = nu.load('minLosses.npy').tolist()
@@ -308,7 +308,7 @@ class GeneticAgent():
             nu.save('minLosses.npy', nu.array(minLosses))
 
 
-    def runAsSlaveOnCluster(self, rawQueue='rawQueue', cookedQueue='cookedQueue', hostIP='192.168.0.181', hostPort=6379):
+    def runAsSlaveOnCluster(self, rawQueue='rawQueue', cookedQueue='cookedQueue', hostIP='10.32.247.48', hostPort=6379):
         workerTank = []
         workerAmount = min(mp.cpu_count()-1, 55)
         for _ in range(workerAmount):
