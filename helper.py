@@ -103,19 +103,19 @@ def _f(phi, r1, r2, d):
     return r1 * r2 * nu.cos(phi) / nu.sqrt( r1**2 + r2**2 + d**2 - 2*r1*r2*nu.cos(phi) )
 
 def MutalInductance(r1, r2, d):
-    return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=100000)[0]
+    # return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=100000)[0]
 
-    # squaredK = 4*r1*r2/((r1+r2)**2+d**2)
-    # k = nu.sqrt(squaredK)
-    # if k < 0.9:
-    #     result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipk(squaredK) - 2/k*ellipe(squaredK) )
-    # else:  # k around 1
-    #     result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipkm1(squaredK) - 2/k*ellipe(squaredK) )
-    #
-    # if result >= 0:
-    #     return result
-    # else:
-    #     return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=10000)[0]
+    squaredK = 4*r1*r2/((r1+r2)**2+d**2)
+    k = nu.sqrt(squaredK) if squaredK != 0 else 0
+    if k < 0.9:
+        result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipk(squaredK) - 2/k*ellipe(squaredK) )
+    else:  # k around 1
+        result = mu0 * nu.sqrt(r1*r2) * ( (2/k-k)*ellipkm1(squaredK) - 2/k*ellipe(squaredK) )
+
+    if result >= 0:
+        return result
+    else:
+        return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=10000)[0]
 
 
 

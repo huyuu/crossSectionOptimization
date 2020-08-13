@@ -10,6 +10,7 @@ import math as ma
 import datetime as dt
 import os
 import pickle
+import redis
 
 from helper import calculateBnormFromLoop, calculateBnormFromCoil, MutalInductance, plotDistribution
 
@@ -58,6 +59,15 @@ def lossFunction(coil, points=50):
     # add to generationQueue
     coil.loss = loss
     return coil
+
+
+def lossFunctionForCluster(rawQueue, cookedQueue, slave):
+    while True:
+        binaryCoil = slave.brpop(rawQueue)
+        coil = pickle.loads(binaryCoil)
+        coil = lossFunction(coil)
+        binaryCoil = pickle.dumps(coil)
+        slave.lpush(cookedQueue, binaryCoil)
 
 
 class Coil():
@@ -242,6 +252,67 @@ class GeneticAgent():
             nu.save('minLosses.npy', nu.array(minLosses))
 
 
+    def runAsMasterOnCluster(self, loopAmount=100, hostIP='10.32.247.48', hostPort=6379):
+        minLosses = []
+        if os.path.exists('minLosses.npy'):
+            minLosses = nu.load('minLosses.npy').tolist()
+        # reach local server as a master
+        # https://qiita.com/wind-up-bird/items/f2d41d08e86789322c71#redis-のインストールと動作確認
+        # https://agency-star.co.jp/column/redis/
+        master = redis.Redis(host=hostIP, port=hostPort)
+        for _ in range(loopAmount):
+            _start = dt.datetime.now()
+            # push tasks into queue
+            for coil in self.generation:
+                master.lpush('rawQueue', pickle.dumps(coil))
+            # get calculated coils
+            calculatedGeneration = []
+            for _ in range(len(self.generation)):
+                _, binaryCoil = master.blpop('cookedQueue')
+                calculatedGeneration.append(pickle.loads(binaryCoil))
+            self.generation = calculatedGeneration
+            print('loss function calculated.')
+            # boom next generation
+            survived = sorted(self.generation, key=lambda coil: coil.loss)[:self.survivalPerGeneration]
+            self.generation = []
+            for life in survived:
+                descendants = life.makeDescendants(amount=self.descendantsPerLife)
+                self.generation.append(life)
+                self.generation.extend(descendants)
+            print('next generation made.')
+            # check if should end
+            _end = dt.datetime.now()
+            print('minLoss: {:.4g} (time cost: {:.3g}[min])'.format(survived[0].loss, (_end-_start).total_seconds()/60))
+            # plot
+            minLosses.append(survived[0].loss)
+            fig = pl.figure()
+            pl.title('Training Result', fontsize=22)
+            pl.xlabel('loop count', fontsize=18)
+            pl.ylabel('min loss', fontsize=18)
+            pl.yscale('log')
+            pl.plot(minLosses)
+            pl.tick_params(labelsize=12)
+            fig.savefig('trainingResult.png')
+            pl.close(fig)
+            # save coil
+            with open('lastGeneration.pickle', 'wb') as file:
+                pickle.dump(survived, file)
+            # https://deepage.net/features/numpy-loadsave.html
+            nu.save('minLosses.npy', nu.array(minLosses))
+
+
+    def runAsSlaveOnCluster(self, rawQueue='rawQueue', cookedQueue='cookedQueue', hostIP='10.32.247.48', hostPort=6379):
+        slave = redis.Redis(host=hostIP, port=hostPort)
+        workerTank = []
+        workerAmount = min(mp.cpu_count()-1, 55)
+        for _ in range(workerAmount):
+            worker = mp.Process(target=lossFunctionForCluster, args=(rawQueue, cookedQueue, slave))
+            worker.start()
+        for worker in workerTank:
+            worker.join()
+
+
+
     def showBestCoils(self):
         for coil in self.generation:
             print(coil.distribution)
@@ -270,5 +341,5 @@ R2 = 1e-7
 if __name__ == '__main__':
     mp.freeze_support()
     agent = GeneticAgent()
-    agent.run()
+    # agent.run()
     # agent.showBestCoils()
