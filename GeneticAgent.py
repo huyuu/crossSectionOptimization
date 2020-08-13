@@ -261,11 +261,14 @@ class GeneticAgent():
         # https://qiita.com/wind-up-bird/items/f2d41d08e86789322c71#redis-のインストールと動作確認
         # https://agency-star.co.jp/column/redis/
         master = redis.Redis(host=hostIP, port=hostPort)
+        print('Master node starts.')
         # clean queues
         while master.rpop('rawQueue') != None:
             pass
         while master.rpop('cookedQueue') != None:
             pass
+        print('Queues cleaned-up.')
+        print('Start main calculation')
         # start main calculation
         for _ in range(loopAmount):
             _start = dt.datetime.now()
@@ -311,6 +314,7 @@ class GeneticAgent():
     def runAsSlaveOnCluster(self, rawQueue='rawQueue', cookedQueue='cookedQueue', hostIP='10.32.247.48', hostPort=6379):
         workerTank = []
         workerAmount = min(mp.cpu_count()-1, 55)
+        print(f'Slave node starts with {workerAmount} workers.')
         for _ in range(workerAmount):
             worker = mp.Process(target=lossFunctionForCluster, args=(rawQueue, cookedQueue, hostIP, hostPort))
             worker.start()
