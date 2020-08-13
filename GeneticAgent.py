@@ -61,9 +61,10 @@ def lossFunction(coil, points=50):
     return coil
 
 
-def lossFunctionForCluster(rawQueue, cookedQueue, slave):
+def lossFunctionForCluster(rawQueue, cookedQueue, hostIP, hostPort):
+    slave = redis.Redis(host=hostIP, port=hostPort)
     while True:
-        binaryCoil = slave.brpop(rawQueue)
+        _, binaryCoil = slave.brpop(rawQueue)
         coil = pickle.loads(binaryCoil)
         coil = lossFunction(coil)
         binaryCoil = pickle.dumps(coil)
@@ -260,6 +261,12 @@ class GeneticAgent():
         # https://qiita.com/wind-up-bird/items/f2d41d08e86789322c71#redis-のインストールと動作確認
         # https://agency-star.co.jp/column/redis/
         master = redis.Redis(host=hostIP, port=hostPort)
+        # clean queues
+        while master.rpop('rawQueue') != None:
+            pass
+        while master.rpop('cookedQueue') != None:
+            pass
+        # start main calculation
         for _ in range(loopAmount):
             _start = dt.datetime.now()
             # push tasks into queue
@@ -268,7 +275,7 @@ class GeneticAgent():
             # get calculated coils
             calculatedGeneration = []
             for _ in range(len(self.generation)):
-                _, binaryCoil = master.blpop('cookedQueue')
+                _, binaryCoil = master.brpop('cookedQueue')
                 calculatedGeneration.append(pickle.loads(binaryCoil))
             self.generation = calculatedGeneration
             print('loss function calculated.')
@@ -302,11 +309,10 @@ class GeneticAgent():
 
 
     def runAsSlaveOnCluster(self, rawQueue='rawQueue', cookedQueue='cookedQueue', hostIP='10.32.247.48', hostPort=6379):
-        slave = redis.Redis(host=hostIP, port=hostPort)
         workerTank = []
         workerAmount = min(mp.cpu_count()-1, 55)
         for _ in range(workerAmount):
-            worker = mp.Process(target=lossFunctionForCluster, args=(rawQueue, cookedQueue, slave))
+            worker = mp.Process(target=lossFunctionForCluster, args=(rawQueue, cookedQueue, hostIP, hostPort))
             worker.start()
         for worker in workerTank:
             worker.join()
