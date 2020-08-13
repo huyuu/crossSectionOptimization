@@ -104,7 +104,10 @@ def _f(phi, r1, r2, d):
 
 def MutalInductance(r1, r2, d):
     # return 0.5 * mu0 * quadrature(_f, 0, 2*nu.pi, args=(r1, r2, d), tol=1e-6, maxiter=100000)[0]
-
+    if r1 == 0:
+        r1 += 1e-8
+    if r2 == 0:
+        r2 += 1e-8
     squaredK = 4*r1*r2/((r1+r2)**2+d**2)
     k = nu.sqrt(squaredK) if squaredK != 0 else 0
     if k < 0.9:
