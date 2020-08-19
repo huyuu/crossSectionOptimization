@@ -11,6 +11,7 @@ import datetime as dt
 import os
 import pickle
 import redis
+import sys
 
 from helper import calculateBnormFromLoop, calculateBnormFromCoil, MutalInductance, plotDistribution
 
@@ -260,6 +261,7 @@ class GeneticAgent():
         # reach local server as a master
         # https://qiita.com/wind-up-bird/items/f2d41d08e86789322c71#redis-のインストールと動作確認
         # https://agency-star.co.jp/column/redis/
+        # https://redis-py.readthedocs.io/en/stable/
         master = redis.Redis(host=hostIP, port=hostPort)
         print('Master node starts.')
         # clean queues
@@ -351,5 +353,11 @@ R2 = 1e-7
 if __name__ == '__main__':
     mp.freeze_support()
     agent = GeneticAgent()
+
+    modeString = sys.args[1]
+    if modeString == 'master' or modeString == 'm':
+        agent.runAsMasterOnCluster()
+    elif modeString == 'slave' or modeString == 's':
+        agent.runAsSlaveOnCluster()
     # agent.run()
     # agent.showBestCoils()
